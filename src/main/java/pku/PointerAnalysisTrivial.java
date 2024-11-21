@@ -1,7 +1,9 @@
 package pku;
 
-
-import java.io.*;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.PrintStream;
 import java.util.TreeSet;
 
 import org.apache.logging.log4j.LogManager;
@@ -12,8 +14,8 @@ import pascal.taie.analysis.ProgramAnalysis;
 import pascal.taie.analysis.misc.IRDumper;
 import pascal.taie.config.AnalysisConfig;
 
-
 public class PointerAnalysisTrivial extends ProgramAnalysis<PointerAnalysisResult> {
+
     public static final String ID = "pku-pta-trivial";
 
     private static final Logger logger = LogManager.getLogger(IRDumper.class);
@@ -35,18 +37,31 @@ public class PointerAnalysisTrivial extends ProgramAnalysis<PointerAnalysisResul
         var preprocess = new PreprocessResult();
         var result = new PointerAnalysisResult();
 
-        World.get().getClassHierarchy().applicationClasses().forEach(jclass->{
+        World.get().getClassHierarchy().applicationClasses().forEach(jclass -> {
             logger.info("Analyzing class {}", jclass.getName());
-            jclass.getDeclaredMethods().forEach(method->{
-                if(!method.isAbstract())
+            jclass.getDeclaredMethods().forEach(method -> {
+                if (!method.isAbstract()) {
                     preprocess.analysis(method.getIR());
+                }
             });
         });
 
-        var objs = new TreeSet<>(preprocess.obj_ids.values());
+        // var objs = new TreeSet<>(preprocess.obj_ids.values());
+        // preprocess.test_pts.forEach((test_id, pt)->{
+        //     result.put(test_id, objs);
+        // });
+        // 遍历每个测试点
+        preprocess.test_pts.forEach((test_id, pt) -> {
+            TreeSet<Integer> matchingobjs = new TreeSet<>();
 
-        preprocess.test_pts.forEach((test_id, pt)->{
-            result.put(test_id, objs);
+            preprocess.var2id.get(pt).forEach((integer) -> {
+                    matchingobjs.add(integer);
+                });
+
+            // 将匹配的对象集合放入结果中
+            if (!matchingobjs.isEmpty()) {
+                result.put(test_id, matchingobjs);
+            }
         });
 
         dump(result);
