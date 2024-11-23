@@ -2,34 +2,30 @@ package pku;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.TreeSet;
 
 import pascal.taie.ir.IR;
 import pascal.taie.ir.exp.IntLiteral;
 import pascal.taie.ir.exp.InvokeStatic;
 import pascal.taie.ir.exp.Var;
 import pascal.taie.ir.stmt.Copy;
+import pascal.taie.ir.stmt.FieldStmt;
 import pascal.taie.ir.stmt.Invoke;
 import pascal.taie.ir.stmt.New;
 
 public class PreprocessResult {
 
-    public final Map<Var, TreeSet<Integer>> var2id;
-    // public final Map<New, Integer> obj_ids;
+    public final Map<Var, Var> assign;
+    public final Map<Var, Map<String, Var>> getf;
+    public final Map<Var, Map<String, Var>> putf;
+    public final Map<Var, Integer> new_id;
     public final Map<Integer, Var> test_pts;
 
     public PreprocessResult() {
-        var2id = new HashMap();
-        // obj_ids = new HashMap<New, Integer>();
+        assign = new HashMap();
+        new_id = new HashMap();
         test_pts = new HashMap();
-    }
-
-    public void addid2var(Var var, int id) {
-        if (!var2id.containsKey(var)) {
-            TreeSet<Integer> empty = new TreeSet();
-            var2id.put(var, empty);
-        }
-        var2id.get(var).add(id);
+        getf = new HashMap();
+        putf = new HashMap();
     }
 
     /**
@@ -39,9 +35,8 @@ public class PreprocessResult {
      * @param id id of the object allocated
      */
     public void alloc(New stmt, int id) {
-        // obj_ids.put(stmt, id);
         Var new_var = stmt.getLValue();
-        addid2var(new_var, id);
+        new_id.put(new_var, id);
     }
 
     /**
@@ -54,20 +49,20 @@ public class PreprocessResult {
         test_pts.put(id, v);
     }
 
-    /**
-     *
-     * @param stmt statement that allocates a new object
-     * @return id of the object allocated
-     */
-    // public int getObjIdAt(New stmt) {
-    //     return obj_ids.get(stmt);
-    // }
-    /**
-     * @param id
-     * @return the pointer/variable in Benchmark.test(id, var);
-     */
-    public Var getTestPt(int id) {
-        return test_pts.get(id);
+    public void add_getf(Var v1, String s, Var v2) {
+        if (!getf.containsKey(v2)) {
+            Map<String, Var> empty = new HashMap();
+            getf.put(v2, empty);
+        }
+        getf.get(v2).put(s, v1);
+    }
+
+    public void add_putf(Var v1, String s, Var v2) {
+        if (!putf.containsKey(v2)) {
+            Map<String, Var> empty = new HashMap();
+            putf.put(v2, empty);
+        }
+        putf.get(v2).put(s, v1);
     }
 
     /**
@@ -109,20 +104,28 @@ public class PreprocessResult {
                     this.alloc((New) stmt, id);
                 }
             } else if (stmt instanceof Copy) {
-                Var lval = ((Copy) stmt).getLValue();
-                Var rval = ((Copy) stmt).getRValue();
+                var lval = ((Copy) stmt).getLValue();
+                var rval = ((Copy) stmt).getRValue();
 
-                TreeSet<Integer> copyid = new TreeSet<>();
-                var2id.forEach((var, set) -> {
-                    if (var == rval) {
-                        set.forEach((integer) -> {
-                            copyid.add(integer);
-                        });
-                    }
-                });
-                copyid.forEach((integer) -> {
-                    addid2var(lval, integer);
-                });
+                assign.put(rval, lval);
+            } else if (stmt instanceof FieldStmt) {
+                var fieldstmt = (FieldStmt) stmt;
+                var fieldvar = fieldstmt.getFieldRef();
+                var lval = fieldstmt.getLValue();
+                var rval = fieldstmt.getRValue();
+                var lfield = lval.getUses();
+                var rfield = rval.getUses();
+                // System.out.printf("Name: %s\n", x);
+                if (!lfield.isEmpty()) {
+                    lfield.forEach((v) -> {
+                        add_putf((Var) v, fieldvar.getName(), (Var) rval);
+                    });
+                }
+                if (!rfield.isEmpty()) {
+                    rfield.forEach((v) -> {
+                        add_getf((Var) lval, fieldvar.getName(), (Var) v);
+                    });
+                }
             }
             id = 0;
         }

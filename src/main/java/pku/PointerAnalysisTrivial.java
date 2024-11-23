@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
-import java.util.TreeSet;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -41,6 +40,7 @@ public class PointerAnalysisTrivial extends ProgramAnalysis<PointerAnalysisResul
             logger.info("Analyzing class {}", jclass.getName());
             jclass.getDeclaredMethods().forEach(method -> {
                 if (!method.isAbstract()) {
+                    logger.info("Analyzing method {}", method.getName());
                     preprocess.analysis(method.getIR());
                 }
             });
@@ -51,20 +51,33 @@ public class PointerAnalysisTrivial extends ProgramAnalysis<PointerAnalysisResul
         //     result.put(test_id, objs);
         // });
         // 遍历每个测试点
-        preprocess.test_pts.forEach((test_id, pt) -> {
-            TreeSet<Integer> matchingobjs = new TreeSet<>();
-
-            if (preprocess.var2id.containsKey(pt)) {
-
-                preprocess.var2id.get(pt).forEach((integer) -> {
-                    matchingobjs.add(integer);
-                });
-            }
-
-            // 将匹配的对象集合放入结果中
-            if (!matchingobjs.isEmpty()) {
-                result.put(test_id, matchingobjs);
-            }
+        // preprocess.test_pts.forEach((test_id, pt) -> {
+        //     TreeSet<Integer> matchingobjs = new TreeSet<>();
+        //     if (preprocess.var2id.containsKey(pt)) {
+        //         preprocess.var2id.get(pt).forEach((integer) -> {
+        //             matchingobjs.add(integer);
+        //         });
+        //     }
+        //     // 将匹配的对象集合放入结果中
+        //     if (!matchingobjs.isEmpty()) {
+        //         result.put(test_id, matchingobjs);
+        //     }
+        // });
+        preprocess.assign.forEach((v1, v2) -> {
+            logger.info("assign {} = {}", v2.getName(), v1.getName());
+        });
+        preprocess.new_id.forEach((v, i) -> {
+            logger.info("new {} point to {} ", v.getName(), i);
+        });
+        preprocess.getf.forEach((v1, M) -> {
+            M.forEach((s, v2) -> {
+                logger.info("assign {} = {}.{}", v2.getName(), v1.getName(), s);
+            });
+        });
+        preprocess.putf.forEach((v1, M) -> {
+            M.forEach((s, v2) -> {
+                logger.info("assign {}.{} = {}", v2.getName(), s, v1.getName());
+            });
         });
 
         dump(result);
