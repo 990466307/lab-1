@@ -12,6 +12,8 @@ import pascal.taie.World;
 import pascal.taie.analysis.ProgramAnalysis;
 import pascal.taie.analysis.misc.IRDumper;
 import pascal.taie.config.AnalysisConfig;
+import pascal.taie.language.classes.JClass;
+import pascal.taie.language.classes.JMethod;
 
 public class PointerAnalysisTrivial extends ProgramAnalysis<PointerAnalysisResult> {
 
@@ -31,17 +33,35 @@ public class PointerAnalysisTrivial extends ProgramAnalysis<PointerAnalysisResul
         }
     }
 
+    public void analyze_single_method(PreprocessResult preprocess, JMethod method) {
+        logger.info("Analyzing method {}", method.getName());
+        preprocess.analysis(method.getIR());
+        logger.info("invoke {} methods", preprocess.invokelist.size());
+        preprocess.invokelist.forEach(info -> {
+            JClass dfclass = info.defineclass;
+            String invname = info.invokename;
+            dfclass.getDeclaredMethods().forEach(dfmethod -> {
+                if ((dfmethod.getName()).equals(invname)) {
+                    preprocess.invokelist.remove(info);
+                    analyze_single_method(preprocess, dfmethod);
+                    if (!dfmethod.getReturnType().getName().equals("void")) {
+                        preprocess.assign.put(preprocess.returnvalue, info.reciever);
+                    }
+                }
+            });
+        });
+    }
+
     @Override
+
     public PointerAnalysisResult analyze() {
         var preprocess = new PreprocessResult();
         var result = new PointerAnalysisResult();
 
         World.get().getClassHierarchy().applicationClasses().forEach(jclass -> {
-            logger.info("Analyzing class {}", jclass.getName());
             jclass.getDeclaredMethods().forEach(method -> {
-                if (!method.isAbstract()) {
-                    logger.info("Analyzing method {}", method.getName());
-                    preprocess.analysis(method.getIR());
+                if ((method.getName()).equals("main")) {
+                    analyze_single_method(preprocess, method);
                 }
             });
         });
@@ -64,19 +84,19 @@ public class PointerAnalysisTrivial extends ProgramAnalysis<PointerAnalysisResul
         //     }
         // });
         preprocess.assign.forEach((v1, v2) -> {
-            logger.info("assign {} = {}", v2.getName(), v1.getName());
+            logger.info("assign {} in {} = {} in {}", v2.getName(), v2.getMethod(), v1.getName(), v1.getMethod());
         });
         preprocess.new_id.forEach((v, i) -> {
-            logger.info("new {} point to {} ", v.getName(), i);
+            logger.info("{} in {} point to new {} ", v.getName(), v.getMethod(), i);
         });
         preprocess.getf.forEach((v1, M) -> {
             M.forEach((s, v2) -> {
-                logger.info("assign {} = {}.{}", v2.getName(), v1.getName(), s);
+                logger.info("assign {} in {} = {}.{} in {}", v2.getName(), v2.getMethod(), v1.getName(), s, v1.getMethod());
             });
         });
         preprocess.putf.forEach((v1, M) -> {
             M.forEach((s, v2) -> {
-                logger.info("assign {}.{} = {}", v2.getName(), s, v1.getName());
+                logger.info("assign {}.{} in {} = {} in {}", v2.getName(), s, v2.getMethod(), v1.getName(), v1.getMethod());
             });
         });
 

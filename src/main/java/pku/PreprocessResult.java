@@ -1,7 +1,10 @@
 package pku;
 
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import pascal.taie.ir.IR;
 import pascal.taie.ir.exp.IntLiteral;
@@ -11,14 +14,33 @@ import pascal.taie.ir.stmt.Copy;
 import pascal.taie.ir.stmt.FieldStmt;
 import pascal.taie.ir.stmt.Invoke;
 import pascal.taie.ir.stmt.New;
+import pascal.taie.ir.stmt.Return;
+import pascal.taie.language.classes.JClass;
 
 public class PreprocessResult {
+
+    public class invokeinfo {
+
+        public Var reciever;
+        public JClass defineclass;
+        public String invokename;
+        public List<Var> params;
+
+        public invokeinfo(Var v, JClass c, String s, List<Var> l) {
+            this.reciever = v;
+            this.defineclass = c;
+            this.invokename = s;
+            this.params = l;
+        }
+    }
 
     public final Map<Var, Var> assign;
     public final Map<Var, Map<String, Var>> getf;
     public final Map<Var, Map<String, Var>> putf;
     public final Map<Var, Integer> new_id;
     public final Map<Integer, Var> test_pts;
+    public final Set<invokeinfo> invokelist;
+    public Var returnvalue;
 
     public PreprocessResult() {
         assign = new HashMap();
@@ -26,6 +48,7 @@ public class PreprocessResult {
         test_pts = new HashMap();
         getf = new HashMap();
         putf = new HashMap();
+        invokelist = new HashSet();
     }
 
     /**
@@ -76,7 +99,8 @@ public class PreprocessResult {
         for (var stmt : stmts) {
 
             if (stmt instanceof Invoke) {
-                var exp = ((Invoke) stmt).getInvokeExp();
+                var invoke = (Invoke) stmt;
+                var exp = invoke.getInvokeExp();
                 if (exp instanceof InvokeStatic) {
                     var methodRef = ((InvokeStatic) exp).getMethodRef();
                     var className = methodRef.getDeclaringClass().getName();
@@ -95,9 +119,19 @@ public class PreprocessResult {
                             var pt = exp.getArg(1);
                             this.test(test_id, pt);
                         }
+                    } else {
+                        var reciever = invoke.getLValue();
+                        var defineclass = invoke.getMethodRef().getDeclaringClass();
+                        var invokename = invoke.getMethodRef().getName();
+                        var params = invoke.getRValue().getArgs();
+                        // System.out.printf("1 : %s\n", x);
+                        // System.out.printf("2 : %s\n", y);
+                        // System.out.printf("3 : %s\n", z);
+                        // System.out.printf("4 : %s\n", w);
+                        invokelist.add(new invokeinfo(reciever, defineclass, invokename, params));
                     }
-
                 }
+
             } else if (stmt instanceof New) {
                 if (id != 0) // ignore unlabeled `new` stmts
                 {
@@ -115,7 +149,6 @@ public class PreprocessResult {
                 var rval = fieldstmt.getRValue();
                 var lfield = lval.getUses();
                 var rfield = rval.getUses();
-                // System.out.printf("Name: %s\n", x);
                 if (!lfield.isEmpty()) {
                     lfield.forEach((v) -> {
                         add_putf((Var) v, fieldvar.getName(), (Var) rval);
@@ -126,6 +159,9 @@ public class PreprocessResult {
                         add_getf((Var) lval, fieldvar.getName(), (Var) v);
                     });
                 }
+            } else if (stmt instanceof Return) {
+                var ret = (Return) stmt;
+                returnvalue = ret.getValue();
             }
             id = 0;
         }
