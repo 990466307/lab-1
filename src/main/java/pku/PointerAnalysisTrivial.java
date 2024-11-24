@@ -194,9 +194,6 @@ public class PointerAnalysisTrivial extends ProgramAnalysis<PointerAnalysisResul
         preprocess.assign.forEach((v1, v2) -> {
             logger.info("assign {} in {} = {} in {}", v2.getName(), v2.getMethod(), v1.getName(), v1.getMethod());
         });
-        preprocess.new_id.forEach((v, i) -> {
-            logger.info("{} in {} point to new {} ", v.getName(), v.getMethod(), i);
-        });
         preprocess.getf.forEach((v1, M) -> {
             M.forEach((s, v2) -> {
                 logger.info("assign {} in {} = {}.{} in {}", v2.getName(), v2.getMethod(), v1.getName(), s, v1.getMethod());
@@ -206,6 +203,12 @@ public class PointerAnalysisTrivial extends ProgramAnalysis<PointerAnalysisResul
             M.forEach((s, v2) -> {
                 logger.info("assign {}.{} in {} = {} in {}", v2.getName(), s, v2.getMethod(), v1.getName(), v1.getMethod());
             });
+        });
+        preprocess.new_id.forEach((v, i) -> {
+            logger.info("{} in {} point to new {} ", v.getName(), v.getMethod(), i);
+        });
+        preprocess.test_pts.forEach((i, v) -> {
+            logger.info("test {} is {} in {} ", i, v.getName(), v.getMethod());
         });
 
         dump(result);
