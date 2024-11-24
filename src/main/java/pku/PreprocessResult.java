@@ -1,5 +1,6 @@
 package pku;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -9,6 +10,7 @@ import java.util.Set;
 import pascal.taie.ir.IR;
 import pascal.taie.ir.exp.IntLiteral;
 import pascal.taie.ir.exp.InvokeStatic;
+import pascal.taie.ir.exp.InvokeVirtual;
 import pascal.taie.ir.exp.Var;
 import pascal.taie.ir.stmt.Copy;
 import pascal.taie.ir.stmt.FieldStmt;
@@ -19,18 +21,35 @@ import pascal.taie.language.classes.JClass;
 
 public class PreprocessResult {
 
-    public class invokeinfo {
+    public class staticinvokeinfo {
 
-        public Var reciever;
+        public Var receiver;
         public JClass defineclass;
         public String invokename;
-        public List<Var> params;
+        public List<Var> inparams;
 
-        public invokeinfo(Var v, JClass c, String s, List<Var> l) {
-            this.reciever = v;
+        public staticinvokeinfo(Var v, JClass c, String s, List<Var> l) {
+            this.receiver = v;
             this.defineclass = c;
             this.invokename = s;
-            this.params = l;
+            this.inparams = l;
+        }
+    }
+
+    public class virtualinvokeinfo {
+
+        public Var receiver;
+        public JClass defineclass;
+        public String invokename;
+        public List<Var> inparams;
+        public Var self;
+
+        public virtualinvokeinfo(Var v, JClass c, String s, List<Var> l, Var ss) {
+            this.receiver = v;
+            this.defineclass = c;
+            this.invokename = s;
+            this.inparams = l;
+            this.self = ss;
         }
     }
 
@@ -39,8 +58,11 @@ public class PreprocessResult {
     public final Map<Var, Map<String, Var>> putf;
     public final Map<Var, Integer> new_id;
     public final Map<Integer, Var> test_pts;
-    public final Set<invokeinfo> invokelist;
+    public final Set<staticinvokeinfo> staticinvokelist;
+    public final Set<virtualinvokeinfo> virtualinvokelist;
+    public final List<Var> params;
     public Var returnvalue;
+    public Var this_self;
 
     public PreprocessResult() {
         assign = new HashMap();
@@ -48,7 +70,9 @@ public class PreprocessResult {
         test_pts = new HashMap();
         getf = new HashMap();
         putf = new HashMap();
-        invokelist = new HashSet();
+        staticinvokelist = new HashSet();
+        virtualinvokelist = new HashSet();
+        params = new ArrayList<>();
     }
 
     /**
@@ -94,10 +118,17 @@ public class PreprocessResult {
      * @param ir ir of a JMethod
      */
     public void analysis(IR ir) {
+        var vars = ir.getParams();
+        vars.forEach(param -> {
+            params.add(param);
+        });
+
+        var ts = ir.getThis();
+        this_self = ts;
+
         var stmts = ir.getStmts();
         Integer id = 0;
         for (var stmt : stmts) {
-
             if (stmt instanceof Invoke) {
                 var invoke = (Invoke) stmt;
                 var exp = invoke.getInvokeExp();
@@ -120,16 +151,23 @@ public class PreprocessResult {
                             this.test(test_id, pt);
                         }
                     } else {
-                        var reciever = invoke.getLValue();
+                        var receiver = invoke.getLValue();
                         var defineclass = invoke.getMethodRef().getDeclaringClass();
                         var invokename = invoke.getMethodRef().getName();
-                        var params = invoke.getRValue().getArgs();
+                        var inparams = invoke.getRValue().getArgs();
                         // System.out.printf("1 : %s\n", x);
                         // System.out.printf("2 : %s\n", y);
                         // System.out.printf("3 : %s\n", z);
                         // System.out.printf("4 : %s\n", w);
-                        invokelist.add(new invokeinfo(reciever, defineclass, invokename, params));
+                        staticinvokelist.add(new staticinvokeinfo(receiver, defineclass, invokename, inparams));
                     }
+                } else if (exp instanceof InvokeVirtual) {
+                    var receiver = invoke.getLValue();
+                    var defineclass = invoke.getMethodRef().getDeclaringClass();
+                    var invokename = invoke.getMethodRef().getName();
+                    var inparams = invoke.getRValue().getArgs();
+                    var self = ((InvokeVirtual) exp).getBase();
+                    virtualinvokelist.add(new virtualinvokeinfo(receiver, defineclass, invokename, inparams, self));
                 }
 
             } else if (stmt instanceof New) {
